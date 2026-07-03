@@ -12,6 +12,7 @@
 #
 # Cache TTL: 1 hour (module-level dict — resets on container restart).
 
+import re
 import time
 import logging
 
@@ -170,11 +171,24 @@ def _record_quota_use(license_key: str, count: int) -> int:
 # Registry SQL packager
 # ---------------------------------------------------------------------------
 
+_SAFE_IDENT_RE = re.compile(r'^[a-z][a-z0-9_]*$')
+
+
+def _safe_ident(name: str) -> str:
+    """Sanitise a string for safe use as a backtick-quoted SQL identifier."""
+    clean = re.sub(r'[^a-z0-9_]', '',
+                   (name or '').strip().lower().replace(' ', '_').replace('-', '_'))
+    if not clean or not _SAFE_IDENT_RE.match(clean):
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+    return clean
+
+
 def _package_registry_sql(table_name: str) -> dict:
     """
     Dump a registry table as gzipped SQL (DROP + CREATE + batched INSERTs).
     Returns {"sha256": str, "record_count": int, "sql_gz_b64": str}.
     """
+    safe_table = _safe_ident(table_name)  # raises ValueError on bad input
     import os as _os
     import pymysql as _pymysql
 
@@ -190,28 +204,28 @@ def _package_registry_sql(table_name: str) -> dict:
     conn = _pymysql.connect(**db_cfg, cursorclass=_pymysql.cursors.Cursor)
     try:
         with conn.cursor() as cur:
-            cur.execute(f"SHOW CREATE TABLE `{table_name}`")
+            cur.execute(f"SHOW CREATE TABLE `{safe_table}`")
             schema_row = cur.fetchone()
             create_sql = schema_row[1] if schema_row else ""
 
-            cur.execute(f"SELECT * FROM `{table_name}` LIMIT 0")
+            cur.execute(f"SELECT * FROM `{safe_table}` LIMIT 0")
             columns  = [d[0] for d in cur.description]
             col_list = ", ".join(f"`{c}`" for c in columns)
 
-            cur.execute(f"SELECT COUNT(*) FROM `{table_name}`")
+            cur.execute(f"SELECT COUNT(*) FROM `{safe_table}`")
             count = cur.fetchone()[0]
 
             lines = [
                 "-- Wombat Registry Export",
-                f"-- Registry: {table_name}",
+                f"-- Registry: {safe_table}",
                 f"-- Records: {count}",
                 "",
-                f"DROP TABLE IF EXISTS `{table_name}`;",
+                f"DROP TABLE IF EXISTS `{safe_table}`;",
                 create_sql + ";",
                 "",
             ]
 
-            cur.execute(f"SELECT * FROM `{table_name}`")
+            cur.execute(f"SELECT * FROM `{safe_table}`")
             BATCH = 500
             while True:
                 rows = cur.fetchmany(BATCH)
@@ -230,7 +244,7 @@ def _package_registry_sql(table_name: str) -> dict:
                         else:
                             vals.append(f"'{conn.escape_string(str(v))}'")
                     vgroups.append(f"({','.join(vals)})")
-                lines.append(f"INSERT INTO `{table_name}` ({col_list}) VALUES")
+                lines.append(f"INSERT INTO `{safe_table}` ({col_list}) VALUES")
                 lines.append(",\n".join(vgroups) + ";")
                 lines.append("")
     finally:
@@ -319,10 +333,17 @@ def wombat_report():
     try:
         data = request.get_json(silent=True) or {}
         _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        fname = f"{int(_time.time())}_{request.remote_addr.replace('.', '-')}.json"
+        # Sanitise remote_addr so it can't be used for path traversal
+        safe_ip = re.sub(r'[^a-zA-Z0-9.:\-]', '', request.remote_addr)[:40].replace('.', '-').replace(':', '-')
+        fname = f"{int(_time.time())}_{safe_ip}.json"
         data["reported_from"] = request.remote_addr
         data["received_at"]   = _date.today().isoformat()
-        (_REPORTS_DIR / fname).write_text(_json.dumps(data, indent=2))
+        report_path = (_REPORTS_DIR / fname).resolve()
+        try:
+            report_path.relative_to(_REPORTS_DIR.resolve())
+        except ValueError:
+            return jsonify({"ok": False}), 400
+        report_path.write_text(_json.dumps(data, indent=2))
         log.info(f"wombat_report: stored {fname} — registry={data.get('registry')} outcome={data.get('outcome')}")
         return jsonify({"ok": True})
     except Exception as exc:
