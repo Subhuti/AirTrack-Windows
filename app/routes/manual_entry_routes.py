@@ -66,7 +66,10 @@ def clean_table_name(name):
     table = (name or "").strip().lower()
     table = table.replace(" ", "_").replace("-", "_")
     table = re.sub(r"[^a-z0-9_]", "", table)
-    return table
+    # Explicit guard: return empty string if result isn't a safe identifier.
+    # The re.sub above already removes all unsafe chars; this assertion makes
+    # the sanitization explicit for static analysis tools.
+    return table if re.fullmatch(r'[a-z0-9_]+', table) else ""
 
 
 def detect_country_table(registration):
