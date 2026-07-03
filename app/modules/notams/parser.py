@@ -22,9 +22,11 @@ HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# FIELD_RE: matches a field label (e.g. 'A) YSSY') and its value, which
+# continues until the next field label line or end of string.
+# Written without re.DOTALL and using [^\n]* to avoid catastrophic backtracking.
 FIELD_RE = re.compile(
-    r"(?m)^(?P<label>[QABCDEFG])\)\s*(?P<value>.*?)(?=^\w\)|\Z)",
-    re.DOTALL,
+    r"(?m)^(?P<label>[QABCDEFG])\)\s*(?P<value>[^\n]*(?:\n(?![A-Z]\))[^\n]*)*)"
 )
 
 NOTAM_ID_RE = re.compile(r"^(?P<series>[A-Z])(?P<number>\d{4})/(?P<year>\d{2})$")
