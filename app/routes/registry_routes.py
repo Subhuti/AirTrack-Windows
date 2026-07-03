@@ -114,8 +114,17 @@ def _table_exists(table_name: str) -> bool:
 
 def _row_count(table_name: str) -> int:
     try:
+        # Use info_schema so the table name is parameterised — CodeQL-safe
+        row = db.session.execute(
+            text("SELECT TABLE_NAME FROM information_schema.TABLES "
+                 "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tn"),
+            {"tn": table_name},
+        ).fetchone()
+        if not row:
+            return 0
+        db_table = row[0]  # DB-sourced, not user-tainted
         return db.session.execute(
-            text(f"SELECT COUNT(*) FROM `{_safe_ident(table_name)}`")
+            text(f"SELECT COUNT(*) FROM `{db_table}`")
         ).scalar() or 0
     except Exception:
         return 0
@@ -487,11 +496,11 @@ def import_registry(country):
 
     # ── Server mode: import from local SQL file ───────────────────────────────
     reg_dir = _registries_dir()
-    country_dir = (reg_dir / country).resolve()
-    try:
-        country_dir.relative_to(reg_dir.resolve())
-    except ValueError:
-        return jsonify({'status': 'error', 'detail': 'Invalid country'}), 400
+    # Validate country against filesystem allowlist — use FS-sourced path, not request value
+    valid_dirs = {p.name: p for p in reg_dir.iterdir() if p.is_dir()}
+    if country not in valid_dirs:
+        return jsonify({'status': 'error', 'detail': f'Not found: {country}'}), 404
+    country_dir = valid_dirs[country]  # filesystem-sourced Path
 
     if not country_dir.is_dir():
         return jsonify({'status': 'error', 'detail': f'Not found: {country}'}), 404
@@ -553,8 +562,15 @@ def remove_registry(country):
         except Exception:
             pass
         try:
-            db.session.execute(text(f"DROP TABLE IF EXISTS `{_safe_ident(table_name)}`"))
-            db.session.commit()
+            row = db.session.execute(
+                text("SELECT TABLE_NAME FROM information_schema.TABLES "
+                     "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tn"),
+                {"tn": table_name},
+            ).fetchone()
+            if row:
+                db_table = row[0]  # DB-sourced name
+                db.session.execute(text(f"DROP TABLE IF EXISTS `{db_table}`"))
+                db.session.commit()
         except Exception as e:
             logging.exception(f'Registry client remove error for {country}')
             return jsonify({'status': 'error', 'detail': 'Remove failed'}), 500
@@ -568,11 +584,11 @@ def remove_registry(country):
 
     # Server mode
     reg_dir = _registries_dir()
-    country_dir = (reg_dir / country).resolve()
-    try:
-        country_dir.relative_to(reg_dir.resolve())
-    except ValueError:
-        return jsonify({'status': 'error', 'detail': 'Invalid country'}), 400
+    # Validate country against filesystem allowlist — use FS-sourced path, not request value
+    valid_dirs = {p.name: p for p in reg_dir.iterdir() if p.is_dir()}
+    if country not in valid_dirs:
+        return jsonify({'status': 'error', 'detail': f'Not found: {country}'}), 404
+    country_dir = valid_dirs[country]  # filesystem-sourced Path
     table_name = None
     if country_dir.is_dir():
         sql_file = _find_sql_file(country_dir)
@@ -581,8 +597,15 @@ def remove_registry(country):
     if not table_name:
         table_name = country.lower().replace(' ', '_')
     try:
-        db.session.execute(text(f"DROP TABLE IF EXISTS `{_safe_ident(table_name)}`"))
-        db.session.commit()
+        row = db.session.execute(
+            text("SELECT TABLE_NAME FROM information_schema.TABLES "
+                 "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tn"),
+            {"tn": table_name},
+        ).fetchone()
+        if row:
+            db_table = row[0]  # DB-sourced name
+            db.session.execute(text(f"DROP TABLE IF EXISTS `{db_table}`"))
+            db.session.commit()
         return jsonify({'status': 'ok', 'detail': f'Removed {country}'})
     except Exception as e:
         logging.exception(f"Registry remove error for {country}")
@@ -884,13 +907,12 @@ def registry_sql(country):
     """Stream the SQL file for a registry — consumed by client installs."""
     from flask import send_file, abort
     reg_dir = _registries_dir()
-    # Sanitise: only allow Title_Case dir names that exist, and must be within reg_dir
-    country_dir = (reg_dir / country).resolve()
-    try:
-        country_dir.relative_to(reg_dir.resolve())
-    except ValueError:
+    # Validate against filesystem allowlist — FS-sourced path, not from request
+    valid_dirs = {p.name: p for p in reg_dir.iterdir() if p.is_dir()}
+    if country not in valid_dirs or country.lower() in _SKIP_DIRS or not country[0].isupper():
         abort(404)
-    if not country_dir.is_dir() or country.lower() in _SKIP_DIRS or not country[0].isupper():
+    country_dir = valid_dirs[country]  # filesystem-sourced Path
+    if not country_dir.is_dir():
         abort(404)
     sql_file = _find_sql_file(country_dir)
     if not sql_file:
