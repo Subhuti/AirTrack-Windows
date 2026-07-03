@@ -65,7 +65,8 @@ def create_checkout_session():
         )
         return redirect(session.url)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        current_app.logger.exception("billing error")
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @billing_bp.route("/billing/success")
