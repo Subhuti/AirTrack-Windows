@@ -20,6 +20,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -357,9 +358,20 @@ def build_search_url(reg):
     return JETPHOTOS_SEARCH_URL.format(query=query)
 
 
+_JETPHOTOS_HOSTS = frozenset({
+    "cdn.jetphotos.com", "www.jetphotos.com", "jetphotos.com",
+})
+
+
 def absolutise_jetphotos_url(href):
     if href.startswith("http://") or href.startswith("https://"):
-        return href
+        # Only return absolute URLs from known jetphotos domains
+        try:
+            if urlparse(href).netloc.lower() in _JETPHOTOS_HOSTS:
+                return href
+        except Exception:
+            pass
+        return None  # Non-jetphotos absolute URL — discard
 
     if href.startswith("/"):
         return f"https://www.jetphotos.com{href}"
@@ -409,7 +421,13 @@ def extract_image_url(photo_page_url):
 
     for img in soup.find_all("img"):
         src = img.get("src") or img.get("data-src") or ""
-        if "cdn.jetphotos.com" in src or "jetphotos" in src:
+        try:
+            _parsed = urlparse(src)
+            _host = _parsed.netloc.lower()
+        except Exception:
+            _host = ""
+        if _host in ("cdn.jetphotos.com", "www.jetphotos.com", "jetphotos.com") or \
+                (not _parsed.scheme and "jetphotos" in src):
             return absolutise_jetphotos_url(src)
 
     return None
