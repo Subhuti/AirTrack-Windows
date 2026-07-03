@@ -469,7 +469,7 @@ def import_registry(country):
             success = _deliver_registry(country)
         except Exception as exc:
             logging.exception(f"Client registry delivery error for {country}")
-            return jsonify({'status': 'error', 'detail': str(exc)}), 500
+            return jsonify({'status': 'error', 'detail': 'Delivery failed'}), 500
 
         if not success:
             return jsonify({'status': 'error', 'detail': 'Delivery failed — check Marmot logs'}), 500
@@ -535,7 +535,7 @@ def import_registry(country):
         return jsonify({'status': 'error', 'detail': 'Import timed out (>10 min)'}), 500
     except Exception as e:
         logging.exception(f"Registry import error for {country}")
-        return jsonify({'status': 'error', 'detail': str(e)}), 500
+        return jsonify({'status': 'error', 'detail': 'Import failed'}), 500
 
 
 @registry_bp.route('/remove/<country>', methods=['POST'])
@@ -556,7 +556,8 @@ def remove_registry(country):
             db.session.execute(text(f"DROP TABLE IF EXISTS `{_safe_ident(table_name)}`"))
             db.session.commit()
         except Exception as e:
-            return jsonify({'status': 'error', 'detail': str(e)}), 500
+            logging.exception(f'Registry client remove error for {country}')
+            return jsonify({'status': 'error', 'detail': 'Remove failed'}), 500
         try:
             installed_dir = _REG_INSTALLED / country
             if installed_dir.exists():
@@ -585,7 +586,7 @@ def remove_registry(country):
         return jsonify({'status': 'ok', 'detail': f'Removed {country}'})
     except Exception as e:
         logging.exception(f"Registry remove error for {country}")
-        return jsonify({'status': 'error', 'detail': str(e)}), 500
+        return jsonify({'status': 'error', 'detail': 'Remove failed'}), 500
 
 
 @registry_bp.route('/purchase-checkout', methods=['POST'])
