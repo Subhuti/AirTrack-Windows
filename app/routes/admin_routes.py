@@ -535,19 +535,15 @@ def modules_toggle():
     folder   = request.form.get('folder', '').strip()
     enabled  = request.form.get('enabled') == '1'
 
-    # Reject names that could traverse outside the modules directory
-    safe_folder = Path(folder).name  # strips any directory components
-    if not safe_folder or safe_folder.startswith('.') or safe_folder != folder:
-        flash('Invalid module name.', 'danger')
-        return redirect(url_for('admin.modules_page'))
-
+    # Validate folder against filesystem allowlist — use FS-sourced name, not request value
     modules_dir = Path(current_app.root_path) / 'modules'
-    meta_path = (modules_dir / safe_folder / 'module.json').resolve()
-    try:
-        meta_path.relative_to(modules_dir.resolve())
-    except ValueError:
-        flash('Invalid module name.', 'danger')
+    valid_modules = {p.name: p for p in modules_dir.iterdir()
+                     if p.is_dir() and not p.name.startswith('.')}
+    if not folder or folder not in valid_modules:
+        flash('Module not found.', 'danger')
         return redirect(url_for('admin.modules_page'))
+    module_dir = valid_modules[folder]  # filesystem-sourced Path
+    meta_path = module_dir / 'module.json'
     if not meta_path.exists():
         flash(f'Module {folder} not found.', 'danger')
         return redirect(url_for('admin.modules_page'))
