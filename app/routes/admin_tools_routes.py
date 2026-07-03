@@ -280,7 +280,7 @@ def git_commit():
             return _err("❌ Git commit failed.", detail=err or out)
         return _ok(status='ok', detail='✅ Commit successful.')
     except Exception as e:
-        return _err(f"❌ Commit failed: {e}")
+        logging.exception("git commit failed"); return _err("Commit failed — see server logs")
 
 
 @admin_tools_bp.route('/git_push', methods=['POST'])
@@ -298,7 +298,7 @@ def git_push():
             return _err("❌ Git push failed.", detail=err or out)
         return _ok(status="ok", detail="✅ Push successful.")
     except Exception as e:
-        return _err(f"❌ Push failed: {e}")
+        logging.exception("git push failed"); return _err("Push failed — see server logs")
 
 
 @admin_tools_bp.route('/git_pull', methods=['POST'])
@@ -313,7 +313,7 @@ def git_pull():
     try:
         rc, out, err = _run_cmd("git fetch origin", cwd=repo, extra_env=_git_env())
         if rc != 0:
-            return _err(f"❌ git fetch failed: {err or out}")
+            logging.error(f"git fetch failed: {err or out}"); return _err("git fetch failed — see server logs")
 
         rc2, behind_str, _ = _run_cmd("git rev-list --count HEAD..origin/main", cwd=repo)
         behind = int(behind_str) if rc2 == 0 and behind_str.strip().isdigit() else 0
@@ -323,12 +323,12 @@ def git_pull():
 
         rc3, out3, err3 = _run_cmd("git reset --hard origin/main", cwd=repo, extra_env=_git_env())
         if rc3 != 0:
-            return _err(f"❌ git reset failed: {err3 or out3}")
+            logging.error(f"git reset failed: {err3 or out3}"); return _err("git reset failed — see server logs")
 
         _run_cmd("git clean -fd", cwd=repo, extra_env=_git_env())
         return _ok(status="ok", detail=out3 or "✅ Pull successful.", restart_required=True)
     except Exception as e:
-        return _err(f"❌ Pull failed: {e}")
+        logging.exception("git pull failed"); return _err("Pull failed — see server logs")
 
 
 @admin_tools_bp.get("/themes")
@@ -348,7 +348,7 @@ def rescan_themes():
         return _ok(status="ok", count=len(themes))
     except Exception as e:
         logging.exception("rescan_themes failed")
-        return _err(f"rescan failed: {e}")
+        logging.exception("rescan failed"); return _err("Rescan failed — see server logs")
 
 
 @admin_tools_bp.route("/export_db_mobile")
@@ -366,7 +366,7 @@ def export_db_mobile():
         )
     except Exception as e:
         logging.exception("❌ Mobile DB export failed")
-        return _err(f"❌ Export failed: {e}")
+        logging.exception("export failed"); return _err("Export failed — see server logs")
 
 
 @admin_tools_bp.route("/housekeeping", methods=["POST"])
@@ -430,7 +430,7 @@ def shutdown():
         threading.Thread(target=_kill).start()
         return _ok(status="success", detail="Server shutting down…")
     except Exception as e:
-        return _err(f"Shutdown failed: {e}")
+        logging.exception("shutdown failed"); return _err("Shutdown failed — see server logs")
 
 
 # ====================== Log Management Routes ======================
@@ -477,7 +477,7 @@ def logs():
 
     except Exception as e:
         logging.exception("❌ Failed to list logs")
-        return _err(f"❌ Failed to list logs: {e}")
+        logging.exception("log list failed"); return _err("Failed to list logs — see server logs")
 
 
 @admin_tools_bp.route("/logs_view/<path:filename>")
@@ -512,7 +512,7 @@ def logs_view(filename):
 
     except Exception as e:
         logging.exception(f"❌ Error reading log {filename}")
-        return _err(f"❌ Failed to read log: {e}")
+        logging.exception("log read failed"); return _err("Failed to read log — see server logs")
 
 
 @admin_tools_bp.route("/logs_download/<path:filename>")
@@ -538,7 +538,7 @@ def logs_download(filename):
         )
     except Exception as e:
         logging.exception(f"❌ Error sending log file {filename}")
-        return _err(f"❌ Failed to download log: {e}")
+        logging.exception("log download failed"); return _err("Failed to download log — see server logs")
 
 
 @admin_tools_bp.route("/check_whitelist_links", methods=["POST"])
@@ -730,7 +730,7 @@ def check_updates():
         )
     except Exception as exc:
         logging.exception("check_updates failed")
-        return _err(f"Update check failed: {exc}", code=500)
+        logging.exception("update check failed"); return _err("Update check failed — see server logs", code=500)
 
 
 @admin_tools_bp.post("/run_updater")
@@ -747,7 +747,7 @@ def run_updater():
         # Fetch latest from origin
         rc, out, err = _run_cmd("git fetch origin", cwd=repo, extra_env=_git_env())
         if rc != 0:
-            return _err(f"git fetch failed: {err or out}", code=500)
+            logging.error(f"git fetch failed: {err or out}"); return _err("git fetch failed — see server logs", code=500)
 
         # Check if we're already current
         rc2, behind_str, _ = _run_cmd(
@@ -761,7 +761,7 @@ def run_updater():
         # Hard reset to origin/main — wipes local divergence cleanly
         rc3, out3, err3 = _run_cmd("git reset --hard origin/main", cwd=repo, extra_env=_git_env())
         if rc3 != 0:
-            return _err(f"git reset failed: {err3 or out3}", code=500)
+            logging.error(f"git reset failed: {err3 or out3}"); return _err("git reset failed — see server logs", code=500)
 
         # Clean up untracked files that conflict with the new state
         _run_cmd("git clean -fd", cwd=repo, extra_env=_git_env())
@@ -773,7 +773,7 @@ def run_updater():
         )
     except Exception as exc:
         logging.exception("run_updater failed")
-        return _err(f"Update failed: {exc}", code=500)
+        logging.exception("update failed"); return _err("Update failed — see server logs", code=500)
 
 
 @admin_tools_bp.route("/logs_tail")
@@ -801,7 +801,7 @@ def logs_tail():
         return _err("Invalid file path.", code=403)
 
     if not file_path.exists() or not file_path.is_file():
-        return _err(f"Log file not found: {filename}", code=404)
+        import html as _html; return _err(f"Log file not found: {_html.escape(str(filename))}", code=404)
 
     try:
         with file_path.open("r", encoding="utf-8", errors="replace") as f:
@@ -810,7 +810,7 @@ def logs_tail():
         return Response(tail, mimetype="text/plain")
     except Exception as exc:
         logging.exception(f"logs_tail failed for {filename}")
-        return _err(f"Failed to read log: {exc}", code=500)
+        logging.exception("log tail read failed"); return _err("Failed to read log — see server logs", code=500)
 
 
 @admin_tools_bp.route("/update_municipality", methods=["POST"])
@@ -833,5 +833,5 @@ def update_municipality():
         return _ok(status="ok", icao=icao, city=city)
     except Exception as e:
         logging.exception("❌ update_municipality failed")
-        return _err(f"❌ Database error: {e}")
+        logging.exception("DB error in admin tools"); return _err("Database error — see server logs")
 
