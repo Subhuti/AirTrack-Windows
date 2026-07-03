@@ -342,16 +342,11 @@ def wombat_report():
     try:
         data = request.get_json(silent=True) or {}
         _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        # Sanitise remote_addr so it can't be used for path traversal
-        safe_ip = re.sub(r'[^a-zA-Z0-9.:\-]', '', request.remote_addr)[:40].replace('.', '-').replace(':', '-')
-        fname = f"{int(_time.time())}_{safe_ip}.json"
+        import uuid as _uuid
+        fname = f"{int(_time.time())}_{_uuid.uuid4().hex[:12]}.json"  # not derived from request
         data["reported_from"] = request.remote_addr
         data["received_at"]   = _date.today().isoformat()
-        report_path = (_REPORTS_DIR / fname).resolve()
-        try:
-            report_path.relative_to(_REPORTS_DIR.resolve())
-        except ValueError:
-            return jsonify({"ok": False}), 400
+        report_path = _REPORTS_DIR / fname  # filesystem-generated name
         report_path.write_text(_json.dumps(data, indent=2))
         log.info(f"wombat_report: stored {fname} — registry={data.get('registry')} outcome={data.get('outcome')}")
         return jsonify({"ok": True})
