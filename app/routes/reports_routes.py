@@ -219,9 +219,11 @@ def ask():
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8")
-        return jsonify({"type": "error", "text": f"API error {e.code}: {error_body}"}), 500
+        current_app.logger.error(f"reports: API error {e.code}")
+        return jsonify({"type": "error", "text": f"API error {e.code}"}), 500
     except Exception as e:
-        return jsonify({"type": "error", "text": f"Failed to contact Anthropic API: {e}"}), 500
+        current_app.logger.exception("reports: Anthropic API unreachable")
+        return jsonify({"type": "error", "text": "Failed to contact AI API"}), 500
 
     # Handle plain answer
     if parsed.get("type") == "answer":
@@ -266,7 +268,8 @@ def ask():
             })
 
         except Exception as e:
-            return jsonify({"type": "error", "text": f"Query failed: {e}"}), 500
+            current_app.logger.exception("reports: query failed")
+            return jsonify({"type": "error", "text": "Query failed"}), 500
 
     return jsonify({"type": "error", "text": "Unexpected response from AI."}), 500
 
