@@ -849,10 +849,12 @@ def refresh() -> Response:
     try:
         bom_fetcher = _load_fetcher_module()
     except Exception as exc:
+        import logging as _log
+        _log.exception("BOM route error: could not import bom_fetcher")
         return _json_response(
             {
                 "ok": False,
-                "error": f"Could not import bom_fetcher: {exc}",
+                "error": "BOM module unavailable — see server logs",
             },
             500,
         )
