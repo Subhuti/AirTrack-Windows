@@ -486,14 +486,12 @@ def logs():
 def logs_view(filename):
     """Display a log file's contents in a browser."""
     logs_dir = Path(current_app.root_path) / "logs"
-    file_path = (logs_dir / filename).resolve()
-    try:
-        file_path.relative_to(logs_dir.resolve())
-    except ValueError:
-        return "Access denied", 403
-
-    if not file_path.exists() or not file_path.is_file():
+    # Build allowlist from filesystem — value used in path comes from FS, not request
+    valid_paths = {str(p.relative_to(logs_dir)): p
+                   for p in logs_dir.glob("**/*") if p.is_file()}
+    if filename not in valid_paths:
         return html.escape(f"Log file not found: {filename}"), 404
+    file_path = valid_paths[filename]  # filesystem-sourced Path, not derived from request
 
     try:
         with file_path.open(
@@ -521,13 +519,11 @@ def logs_view(filename):
 def logs_download(filename):
     """Allow downloading a log file."""
     logs_dir = Path(current_app.root_path) / 'logs'
-    file_path = (logs_dir / filename).resolve()
-    try:
-        file_path.relative_to(logs_dir.resolve())
-    except ValueError:
-        return "Access denied", 403
-    if not file_path.exists() or not file_path.is_file():
+    valid_paths = {str(p.relative_to(logs_dir)): p
+                   for p in logs_dir.glob("**/*") if p.is_file()}
+    if filename not in valid_paths:
         return html.escape(f"Log file not found: {filename}"), 404
+    file_path = valid_paths[filename]
 
     try:
         return send_file(
