@@ -188,7 +188,6 @@ def _package_registry_sql(table_name: str) -> dict:
     Dump a registry table as gzipped SQL (DROP + CREATE + batched INSERTs).
     Returns {"sha256": str, "record_count": int, "sql_gz_b64": str}.
     """
-    safe_table = _safe_ident(table_name)  # raises ValueError on bad input
     import os as _os
     import pymysql as _pymysql
 
@@ -204,6 +203,16 @@ def _package_registry_sql(table_name: str) -> dict:
     conn = _pymysql.connect(**db_cfg, cursorclass=_pymysql.cursors.Cursor)
     try:
         with conn.cursor() as cur:
+            # Validate table_name against information_schema — get DB-sourced name
+            cur.execute(
+                "SELECT TABLE_NAME FROM information_schema.TABLES "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
+                (table_name,)
+            )
+            _trow = cur.fetchone()
+            if not _trow:
+                raise ValueError(f"Unknown table: {table_name!r}")
+            safe_table = _trow[0]  # DB-sourced name — not derived from request
             cur.execute(f"SHOW CREATE TABLE `{safe_table}`")
             schema_row = cur.fetchone()
             create_sql = schema_row[1] if schema_row else ""
