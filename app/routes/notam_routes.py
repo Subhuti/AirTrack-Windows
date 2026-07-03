@@ -176,7 +176,8 @@ def api_notams_live():
         return jsonify({"disclaimer": DISCLAIMER_STRIP, "count": len(notams), "notams": notams})
     except Exception as exc:
         log.error(f"notam_routes live: {exc}")
-        return jsonify({"error": "query failed", "detail": str(exc)}), 500
+        log.error(f"notam_routes live: {exc}")
+        return jsonify({"error": "query failed"}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +259,8 @@ def api_notams_live_csv():
         rows = db.session.execute(text(sql), params).fetchall()
     except Exception as exc:
         log.error(f"notam_routes live.csv: {exc}")
-        return make_response(f"# query failed: {exc}\n", 500, {"Content-Type": "text/plain"})
+        log.error(f"notam_routes live.csv: {exc}")
+        return make_response("# query failed\n", 500, {"Content-Type": "text/plain"})
 
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
@@ -464,7 +466,8 @@ def api_notams_fetch():
     try:
         from modules.notams.skylink_adapter import run_fetch
     except ImportError as exc:
-        return jsonify({"error": "SkyLink adapter not available", "detail": str(exc)}), 503
+        log.warning(f"notam_routes: SkyLink adapter unavailable: {exc}")
+        return jsonify({"error": "SkyLink adapter not available"}), 503
 
     try:
         result = run_fetch()
@@ -472,7 +475,8 @@ def api_notams_fetch():
         return jsonify({"status": "ok", "result": result})
     except Exception as exc:
         log.error(f"Manual NOTAM fetch failed: {exc}")
-        return jsonify({"error": "fetch failed", "detail": str(exc)}), 500
+        log.error(f"Manual NOTAM fetch failed: {exc}")
+        return jsonify({"error": "fetch failed"}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +503,8 @@ def api_notams_import():
     try:
         records = normalize_many(raw, source=source)
     except Exception as exc:
-        return jsonify({"error": "parse failed", "detail": str(exc)}), 400
+        log.warning(f"notam_routes import parse failed: {exc}")
+        return jsonify({"error": "parse failed"}), 400
 
     imported = 0
     skipped  = 0
