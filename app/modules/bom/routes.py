@@ -863,10 +863,12 @@ def refresh() -> Response:
             return _json_response({"ok": ok, "status": _status()})
         return redirect(url_for("bom.dashboard"))
     except Exception as exc:
+        import logging as _log
+        _log.exception("BOM route error")
         return _json_response(
             {
                 "ok": False,
-                "error": str(exc),
+                "error": "Internal server error",
             },
             500,
         )
