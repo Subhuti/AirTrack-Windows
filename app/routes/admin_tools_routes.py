@@ -789,15 +789,11 @@ def logs_tail():
     if not filename:
         return _err("file param required.")
 
-    file_path = (logs_dir / filename).resolve()
-    # Safety: must stay inside logs_dir
-    try:
-        file_path.relative_to(logs_dir.resolve())
-    except ValueError:
-        return _err("Invalid file path.", code=403)
-
-    if not file_path.exists() or not file_path.is_file():
-        import html as _html; return _err(f"Log file not found: {_html.escape(str(filename))}", code=404)
+    import html as _html
+    valid_paths = {str(p.relative_to(logs_dir)): p for p in logs_dir.glob("**/*") if p.is_file()}
+    if filename not in valid_paths:
+        return _err(f"Log file not found: {_html.escape(str(filename))}", code=404)
+    file_path = valid_paths[filename]  # filesystem-sourced Path
 
     try:
         with file_path.open("r", encoding="utf-8", errors="replace") as f:
