@@ -6,6 +6,7 @@
 from pathlib import Path
 
 from flask import (
+    current_app,
     Blueprint,
     flash,
     redirect,
@@ -17,17 +18,33 @@ from sqlalchemy import text
 
 from extensions import db
 from utils.settings_utils import get_current_theme
+from urllib.parse import urlparse
 
 airline_logo_linker = Blueprint(
     "airline_logo_linker", __name__, url_prefix="/link_airlines"
 )
 
 
+
+def _safe_redirect(default_endpoint: str) -> str:
+    """Return referrer URL only if it's the same host as this request; else default."""
+    ref = request.referrer
+    if ref:
+        try:
+            ref_host = urlparse(ref).netloc
+            own_host = urlparse(request.host_url).netloc
+            if ref_host == own_host or not ref_host:
+                return ref
+        except Exception:
+            pass
+    return url_for(default_endpoint)
+
+
 # ✅ ROUTE DECORATOR ADDED
 @airline_logo_linker.route("/", methods=["GET", "POST"])
 def link_airline_logos():
     search = request.args.get("search", "").lower()
-    logos_path = Path("static/logos")
+    logos_path = Path(current_app.root_path) / "static" / "logos"
     all_logos = {f.stem for f in logos_path.glob("*.png")}
 
     if request.method == "POST":
@@ -88,7 +105,7 @@ def unlink_logo():
     if not airline_id:
         flash("No airline specified to unlink.", "warning")
         return redirect(
-            request.referrer or url_for("airline_logo_linker.link_airline_logos")
+            _safe_redirect("airline_logo_linker.link_airline_logos")
         )
 
     try:
@@ -103,5 +120,5 @@ def unlink_logo():
         flash(f"❌ Failed to unlink logo: {e}", "danger")
 
     return redirect(
-        request.referrer or url_for("airline_logo_linker.link_airline_logos")
+        _safe_redirect("airline_logo_linker.link_airline_logos")
     )
