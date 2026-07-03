@@ -1,4 +1,4 @@
 flask==3.0.3
-waitress==3.0.0
+waitress==3.0.1
 pywin32==311
 pyinstaller==6.3.0
