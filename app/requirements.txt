@@ -25,7 +25,7 @@ asn1crypto==1.5.1
 itsdangerous==2.2.0
 
 # SSH tools
-paramiko==3.4.0
+paramiko==5.0.0
 
 # Prod server
 gunicorn==26.0.0
