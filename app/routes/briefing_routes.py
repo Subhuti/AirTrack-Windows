@@ -68,4 +68,5 @@ def generate_briefing():
         return jsonify({"ok": True, "generated_at": briefing.get("generated_at")})
     except Exception as exc:
         log.error("Manual briefing generation failed: %s", exc, exc_info=True)
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        current_app.logger.exception("briefing error")
+        return jsonify({"ok": False, "error": "Internal server error"}), 500
