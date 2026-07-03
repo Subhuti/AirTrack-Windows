@@ -150,8 +150,17 @@ def fetch_aircraft(table_name, registration):
     if not table or not reg or not table_exists(table):
         return None
 
+    # Validate table against information_schema to get a DB-sourced name
+    _trow = db.session.execute(
+        text("SELECT TABLE_NAME FROM information_schema.TABLES "
+             "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tn"),
+        {"tn": table},
+    ).fetchone()
+    if not _trow:
+        return None
+    db_table = _trow[0]  # DB-sourced, not request-tainted
     row = db.session.execute(
-        text(f"SELECT * FROM `{table}` WHERE registration = :registration LIMIT 1"),
+        text(f"SELECT * FROM `{db_table}` WHERE registration = :registration LIMIT 1"),
         {"registration": reg},
     ).mappings().fetchone()
 
